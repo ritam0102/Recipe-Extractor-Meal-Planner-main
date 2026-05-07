@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from html import escape
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
@@ -14,6 +15,23 @@ from app.config import settings
 
 class ScrapeError(RuntimeError):
     pass
+
+
+BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "Upgrade-Insecure-Requests": "1",
+}
+
+BLOCKED_STATUS_CODES = {401, 402, 403, 429, 451}
+READER_FALLBACK_PREFIX = "https://r.jina.ai/http://r.jina.ai/http://"
 
 
 @dataclass
@@ -76,23 +94,92 @@ def fetch_page_html(url: str) -> str:
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise ScrapeError("Please provide a valid HTTP or HTTPS recipe URL.")
 
+    blocked_error = ""
     try:
         response = requests.get(
             url,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/124.0 Safari/537.36 RecipeExtractor/1.0"
-                )
-            },
+            headers={**BROWSER_HEADERS, "Referer": f"{parsed.scheme}://{parsed.netloc}/"},
             timeout=settings.request_timeout_seconds,
         )
+        if response.status_code in BLOCKED_STATUS_CODES:
+            blocked_error = (
+                "The recipe site blocked the hosted server request "
+                f"({response.status_code} {response.reason}). "
+            )
+            raise requests.HTTPError(blocked_error)
         response.raise_for_status()
     except requests.RequestException as exc:
+        fallback_html = fetch_reader_fallback(url)
+        if fallback_html:
+            return fallback_html
+        if blocked_error:
+            raise ScrapeError(
+                f"{blocked_error} The reader fallback could not fetch this page. "
+                "Try another public recipe URL, or run the app locally for this site."
+            ) from exc
         raise ScrapeError(f"Could not fetch the recipe page: {exc}") from exc
 
     return response.text
+
+
+def fetch_reader_fallback(url: str) -> str:
+    try:
+        response = requests.get(
+            f"{READER_FALLBACK_PREFIX}{url}",
+            headers={"User-Agent": BROWSER_HEADERS["User-Agent"], "Accept": "text/plain,*/*;q=0.8"},
+            timeout=settings.request_timeout_seconds,
+        )
+        response.raise_for_status()
+    except requests.RequestException:
+        return ""
+
+    text = response.text.strip()
+    if not text:
+        return ""
+    return reader_markdown_to_html(url, text)
+
+
+def reader_markdown_to_html(url: str, markdown: str) -> str:
+    title = extract_reader_title(markdown) or "Untitled recipe"
+    body = extract_reader_recipe_section(markdown)
+    paragraphs = "\n".join(f"<p>{escape(line.strip())}</p>" for line in body.splitlines() if line.strip())
+    return (
+        "<html>"
+        f"<head><title>{escape(title)}</title><meta name=\"description\" content=\"Recipe content from {escape(url)}\"></head>"
+        f"<body><article><h1>{escape(title)}</h1>{paragraphs}</article></body>"
+        "</html>"
+    )
+
+
+def extract_reader_title(markdown: str) -> str:
+    match = re.search(r"^Title:\s*(.+)$", markdown, flags=re.MULTILINE)
+    if match:
+        return match.group(1).strip()
+    match = re.search(r"^#\s+(.+)$", markdown, flags=re.MULTILINE)
+    return match.group(1).strip() if match else ""
+
+
+def extract_reader_recipe_section(markdown: str) -> str:
+    markers = [
+        "\nPrep Time:",
+        "\nCook Time:",
+        "\nTotal Time:",
+        "\nServings:",
+        "\n## Ingredients",
+        "\n## Directions",
+        "\n## Instructions",
+    ]
+    starts = [index for marker in markers if (index := markdown.find(marker)) >= 0]
+    if not starts:
+        return markdown[: settings.max_scraped_chars]
+
+    start = max(min(starts) - 1200, 0)
+    relevant = markdown[start:]
+    end_markers = ["\n## Nutrition Facts", "\n## Reviews", "\n## Photos", "\nYou may also like"]
+    ends = [index for marker in end_markers if (index := relevant.find(marker)) > 0]
+    if ends:
+        relevant = relevant[: min(ends)]
+    return relevant[: settings.max_scraped_chars]
 
 
 def extract_recipe_json_ld(soup: BeautifulSoup) -> dict[str, Any] | None:
