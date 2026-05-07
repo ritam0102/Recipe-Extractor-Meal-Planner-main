@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: recipe-planner-postgres
+    environment:
+      POSTGRES_DB: recipe_planner
+      POSTGRES_USER: recipe_user
+      POSTGRES_PASSWORD: recipe_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - recipe_planner_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U recipe_user -d recipe_planner"]
+      interval: 5s
+      timeout: 5s
+      retries: 8
+
+volumes:
+  recipe_planner_data:

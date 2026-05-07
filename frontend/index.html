@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Recipe Extractor & Meal Planner</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">Recipe Extractor</p>
+          <h1>Meal planning from any recipe blog URL</h1>
+        </div>
+        <div class="status-pill" id="historyCount">0 saved</div>
+      </header>
+
+      <nav class="tabs" aria-label="Main views">
+        <button class="tab-button active" type="button" data-tab="extract">Extract Recipe</button>
+        <button class="tab-button" type="button" data-tab="history">Saved Recipes</button>
+      </nav>
+
+      <section class="tab-panel active" id="extractPanel">
+        <form class="url-form" id="extractForm">
+          <label for="recipeUrl">Recipe blog URL</label>
+          <div class="form-row">
+            <input
+              id="recipeUrl"
+              type="url"
+              required
+              placeholder="https://www.allrecipes.com/recipe/23891/grilled-cheese-sandwich/"
+            />
+            <button class="secondary-button" type="button" id="previewButton">Preview URL</button>
+            <button class="primary-button" type="submit" id="extractButton">Extract Recipe</button>
+          </div>
+        </form>
+        <div class="message hidden" id="message"></div>
+        <div class="url-preview hidden" id="urlPreview"></div>
+        <div id="recipeResult" class="recipe-grid empty-state">
+          <div>
+            <h2>Ready for a recipe URL</h2>
+            <p>Extracted recipes appear here with ingredients, instructions, nutrition, substitutions, shopping list, and pairings.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="historyPanel">
+        <div class="toolbar">
+          <div>
+            <h2>Saved Recipes</h2>
+            <p>Choose 3-5 saved recipes for a combined shopping list.</p>
+          </div>
+          <button class="secondary-button" type="button" id="planButton">Generate Meal Plan</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Plan</th>
+                <th scope="col">Title</th>
+                <th scope="col">Cuisine</th>
+                <th scope="col">Difficulty</th>
+                <th scope="col">Date extracted</th>
+                <th scope="col">Action</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+        <div id="mealPlanResult" class="meal-plan hidden"></div>
+      </section>
+    </main>
+
+    <div class="modal-backdrop hidden" id="modalBackdrop">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-header">
+          <h2 id="modalTitle">Recipe Details</h2>
+          <button class="icon-button" type="button" id="closeModal" aria-label="Close details">×</button>
+        </div>
+        <div id="modalBody" class="recipe-grid"></div>
+      </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
