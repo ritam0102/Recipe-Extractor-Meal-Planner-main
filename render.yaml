@@ -1,0 +1,24 @@
+services:
+  - type: web_service
+    name: recipe-extractor-backend
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: USE_LLM
+        value: "true"
+      - key: REQUIRE_LLM
+        value: "true"
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+
+databases:
+  - name: recipe-planner-db
+    engine: postgres
+    version: "16"
+    plan: starter
+    region: oregon
